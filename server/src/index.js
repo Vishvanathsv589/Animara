@@ -181,4 +181,8 @@ app.use((err, _req, res, _next) => {
   if (err instanceof multer.MulterError) return res.status(400).json({ error: err.message });
   res.status(500).json({ error: 'Unexpected server error.' });
 });
-app.listen(port, () => console.log(`Animara API listening on http://localhost:${port}`));
+export default app;
+// Keep the standalone listener for the existing Render backup deployment.
+if (!process.env.VERCEL) {
+  app.listen(port, () => console.log(`Animara API listening on http://localhost:${port}`));
+}
