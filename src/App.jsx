@@ -334,7 +334,7 @@ function ReportPage(){
       <CheckCircle2 size={48}/><span className="eyebrow">DEMO REPORT CREATED</span>
       <h2>Thank you for<br/><em>looking out.</em></h2>
       <p>Your report has been securely received by Animara for review. It has not been sent to emergency services.</p>
-      <div className="report-reference"><span>DEMO REFERENCE</span><strong>{reference}</strong></div>
+      <div className="report-reference"><span>DEMO PAYMENT REFERENCE</span><strong>{reference}</strong></div>
       <p className="form-disclaimer">Keep this reference for the current demonstration. A live platform would need a secure backend and NGO routing before reports could be delivered.</p>
       <button className="button button-dark" type="button" onClick={reset}>Submit another report <ArrowUpRight size={16}/></button>
      </div>:stage==='review'?<div className="report-review">
@@ -400,7 +400,7 @@ function DonatePage(){
   setStage('review');
   window.scrollTo({top:0,behavior:'smooth'});
  };
- const confirmContribution=async()=>{setDonationSaving(true);setDonationError('');try{const result=await api('/api/submissions/donation-intent',{method:'POST',body:JSON.stringify({need_id:selectedNeedId,amount:contribution})});setReference(result.reference);setStage('success');window.scrollTo({top:0,behavior:'smooth'});}catch(error){setDonationError(error.message);}finally{setDonationSaving(false);}};
+ const confirmContribution=async()=>{setDonationSaving(true);setDonationError('');try{const result=await api('/api/submissions/demo-payment',{method:'POST',body:JSON.stringify({need_id:selectedNeedId,amount:contribution})});setReference(result.reference);setStage('success');window.scrollTo({top:0,behavior:'smooth'});}catch(error){setDonationError(error.message);}finally{setDonationSaving(false);}};
  const resetDonation=()=>{
   setAmount('500');
   setCustomAmount('');
@@ -424,11 +424,11 @@ function DonatePage(){
    <div className="form-card donation-card">
     {stage==='success'?<div className="success-state">
       <CheckCircle2 size={48}/>
-      <span className="eyebrow">CONTRIBUTION INTENT SAVED</span>
+      <span className="eyebrow">DEMO PAYMENT SUCCESSFUL</span>
       <h2>Thank you for<br/><em>showing up.</em></h2>
-      <p>Your contribution intent has been saved. <strong>No payment was collected</strong> and no NGO has received funds.</p>
+      <p>Your <strong>demo payment was recorded successfully</strong>. No real money was collected or transferred to an NGO.</p>
       <div className="report-reference"><span>DEMO REFERENCE</span><strong>{reference}</strong></div>
-      <p className="form-disclaimer">A live donation experience requires a secure payment gateway, verified NGO accounts and a confirmed process for tracking contributions.</p>
+      <p className="form-disclaimer">This is a simulated payment for demonstration only. It is not a real financial transaction and no funds have been transferred.</p>
       <button className="button button-dark" type="button" onClick={resetDonation}>Make another contribution <ArrowUpRight size={16}/></button>
      </div>:stage==='review'?<div className="donation-review">
       <div className="form-heading"><span className="eyebrow">03 / REVIEW CONTRIBUTION</span><span className="required-note">Demo checkout</span></div>
@@ -438,7 +438,7 @@ function DonatePage(){
       <p className="form-disclaimer">This is a demonstration only. No payment details are requested and no money will be transferred.</p>
       <div className="review-actions">
        <button className="button button-outline" type="button" onClick={()=>setStage('edit')}>Back to edit</button>
-       {donationError&&<span className="location-status" role="alert">{donationError}</span>}<button className="button button-dark" type="button" onClick={confirmContribution} disabled={donationSaving}>{donationSaving?'Saving…':'Save contribution intent'} <ArrowUpRight size={16}/></button>
+       {donationError&&<span className="location-status" role="alert">{donationError}</span>}<button className="button button-dark" type="button" onClick={confirmContribution} disabled={donationSaving}>{donationSaving?'Processing demo payment…':`Pay ${formatMoney(contribution)} (Demo)`} <ArrowUpRight size={16}/></button>
       </div>
      </div>:<form onSubmit={continueToReview}>
       <div className="form-heading"><span className="eyebrow">01 / PICK A NEED</span></div>
@@ -464,7 +464,7 @@ function DonatePage(){
       </label>
       {customAmount!==''&&(!validContribution)&&<span className="location-status" role="alert">Enter a whole amount of at least ₹1.</span>}
       <button className="button button-dark button-wide" type="submit" disabled={!selectedNeed||!validContribution}>Continue with contribution <ArrowUpRight size={16}/></button>
-      {donationError&&<span className="location-status" role="alert">{donationError}</span>}<p className="form-disclaimer">No payment gateway is connected. This saves an intent only; no money is collected.</p>
+      {donationError&&<span className="location-status" role="alert">{donationError}</span>}<p className="form-disclaimer">Demo mode: the next step records a successful simulated payment in Animara. No payment gateway or real money is involved.</p>
      </form>}
    </div>
   </section>

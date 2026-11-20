@@ -70,6 +70,22 @@ app.post('/api/submissions/donation-intent', requireSupabase, async (req, res) =
   res.status(201).json({ reference: data.id, payment_status: 'not_started', message: 'Donation intent saved. No payment has been collected.' });
 });
 
+// Demo-only payment: records a simulated success without contacting any payment provider.
+app.post('/api/submissions/demo-payment', requireSupabase, async (req, res) => {
+  const needId = Number(req.body.need_id), amount = Number(req.body.amount);
+  if (!Number.isInteger(needId) || !Number.isInteger(amount) || amount < 1 || amount > 1000000) return res.status(422).json({ error: 'Choose a valid need and a whole-number amount.' });
+  const { data: need, error: needError } = await supabaseAdmin.from('needs').select('id').eq('id', needId).eq('status', 'published').maybeSingle();
+  if (needError || !need) return res.status(404).json({ error: 'This need is no longer available.' });
+  const { data, error } = await supabaseAdmin.from('donation_intents').insert({ need_id: needId, amount_inr: amount, payment_status: 'demo_paid' }).select('id, created_at').single();
+  if (error) return fail(res, error, 500);
+  res.status(201).json({
+    reference: data.id,
+    payment_status: 'demo_paid',
+    demo: true,
+    message: 'Demo payment completed successfully. No real payment was collected or transferred.'
+  });
+});
+
 // Authentication. Admin allow-list is enforced by admin_users on every protected request.
 app.post('/api/auth/login', requireSupabase, async (req, res) => {
   if (!supabaseAuth) return res.status(503).json({ error: 'Supabase Auth is not configured.' });

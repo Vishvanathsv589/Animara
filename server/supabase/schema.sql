@@ -68,7 +68,7 @@ create table if not exists public.donation_intents (
   id uuid primary key default gen_random_uuid(),
   need_id bigint not null references public.needs(id) on delete restrict,
   amount_inr integer not null check (amount_inr > 0),
-  payment_status text not null default 'not_started' check (payment_status in ('not_started','pending','paid','failed','refunded')),
+  payment_status text not null default 'not_started' check (payment_status in ('not_started','pending','paid','demo_paid','failed','refunded')),
   created_at timestamptz not null default now()
 );
 

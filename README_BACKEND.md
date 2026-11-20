@@ -8,7 +8,7 @@ This backend is added to the existing V1-based V4 React + Vite project. The publ
 - API: Node.js + Express (`server/`)
 - Database and authentication: Supabase PostgreSQL + Supabase Auth
 - Private report photo storage: Supabase Storage bucket `rescue-photos`
-- Payments: deliberately not enabled. The app only records a donation intent; it does not collect money.
+- Payments: no payment gateway is connected. The public Pay button completes a simulated demo checkout, records `payment_status = 'demo_paid'`, and shows **Demo payment successful** in Admin. No money is collected or transferred.
 
 ## 1. Create Supabase project
 
@@ -76,6 +76,7 @@ Public:
 - `POST /api/submissions/contact`
 - `POST /api/submissions/rescue-report` (multipart form; up to 3 JPG/PNG/WEBP files, 5 MB each)
 - `POST /api/submissions/donation-intent` (records an intent only; no payment)
+- `POST /api/submissions/demo-payment` (records a simulated successful checkout with `demo_paid`; no payment provider or real funds)
 
 Admin (requires an access token for a user in `admin_users`):
 - `POST /api/auth/login`
@@ -92,4 +93,4 @@ Admin (requires an access token for a user in `admin_users`):
 - Deploy the Vite frontend to Vercel and set `VITE_API_URL` to the deployed API origin.
 - Use HTTPS, rotate keys if exposed, and never commit `.env` files.
 - Add an operational process for responding to rescue reports. The site clearly states it is not an emergency dispatch service.
-- Payments remain disabled. Before enabling them, implement a payment provider's server-side order creation, signed webhook verification, refund/reconciliation and NGO payout controls.
+- Real payments remain disabled. The demo checkout is not financial proof and must never be reported as funds received. If real payments are introduced later, implement a provider's server-side order creation, signed webhook verification, refund/reconciliation and NGO payout controls.
