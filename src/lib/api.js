@@ -1,4 +1,4 @@
-const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+const API_BASE = (import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:5000' : '')).replace(/\/$/, '');
 const TOKEN_KEY = 'animara_admin_access_token';
 
 export function getAdminToken() { return sessionStorage.getItem(TOKEN_KEY); }
