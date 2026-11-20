@@ -6,6 +6,11 @@ import { api, loadPublicData } from './lib/api';
 import AdminPage from './admin/AdminPage.jsx';
 
 const img = (url, alt='', cls='') => <img className={cls} src={url} alt={alt} loading="lazy" />;
+const parseRupees = value => {
+ const digits = String(value ?? '').replace(/[^0-9]/g, '');
+ return digits ? Number(digits) : 0;
+};
+const formatRupees = value => `₹${Number(value || 0).toLocaleString('en-IN')}`;
 function Header(){
  const [open,setOpen]=useState(false); const loc=useLocation();
  React.useEffect(()=>setOpen(false),[loc.pathname]);
@@ -24,7 +29,13 @@ function ScrollToTop(){
 }
 function Shell({children}){return <><Header/><main>{children}</main><Footer/></>}
 function SectionHead({kicker,title,copy,link,to}){return <div className="section-head"><div><span className="eyebrow">{kicker}</span><h2>{title}</h2>{copy&&<p className="section-copy">{copy}</p>}</div>{link&&<Link className="text-link" to={to}>{link}<ArrowUpRight size={16}/></Link>}</div>}
-function NeedCard({item}){return <article className="need-card"><div className="need-card-image">{img(item.image,item.title,'need-image')}<span className={'need-image-tag '+(item.urgency==='Urgent'?'is-urgent':'')}>{item.urgency}</span></div><div className="need-content"><div className="card-meta"><span className="pill">{item.category}</span><span className="small-muted">{item.location}</span></div><span className="small-muted need-ngo">{item.ngo}</span><h3>{item.title}</h3><p>{item.description}</p><div className="need-progress"><div className="progress-label"><span>Raised so far</span><strong>{item.raised}%</strong></div><div className="progress-track" role="progressbar" aria-label={'Fundraising progress for '+item.title} aria-valuemin="0" aria-valuemax="100" aria-valuenow={item.raised}><span style={{width:item.raised+'%'}}/></div><div className="need-bottom"><strong>{item.amount} <small>needed</small></strong><Link to={`/donate?need=${item.id}`} className="round-arrow" aria-label={'Contribute to '+item.title}><ArrowUpRight size={18}/></Link></div></div></div></article>}
+function NeedCard({item}){
+ const targetAmount = parseRupees(item.amount);
+ const raisedAmount = Number.isFinite(Number(item.raised_amount_inr))
+  ? Number(item.raised_amount_inr)
+  : Math.round(targetAmount * (Number(item.raised) || 0) / 100);
+ return <article className="need-card"><div className="need-card-image">{img(item.image,item.title,'need-image')}<span className={'need-image-tag '+(item.urgency==='Urgent'?'is-urgent':'')}>{item.urgency}</span></div><div className="need-content"><div className="card-meta"><span className="pill">{item.category}</span><span className="small-muted">{item.location}</span></div><span className="small-muted need-ngo">{item.ngo}</span><h3>{item.title}</h3><p>{item.description}</p><div className="need-progress"><div className="progress-label"><span>{formatRupees(raisedAmount)} raised</span><strong>{item.raised}%</strong></div><div className="progress-track" role="progressbar" aria-label={'Fundraising progress for '+item.title} aria-valuemin="0" aria-valuemax="100" aria-valuenow={item.raised}><span style={{width:item.raised+'%'}}/></div><div className="need-bottom"><strong>{item.amount} <small>goal</small></strong><Link to={`/donate?need=${item.id}`} className="round-arrow" aria-label={'Contribute to '+item.title}><ArrowUpRight size={18}/></Link></div></div></div></article>
+}
 function Home() {
   const [homeNeeds,setHomeNeeds]=useState(needs);
   React.useEffect(()=>{loadPublicData('/api/needs',needs).then(setHomeNeeds);},[]);
@@ -400,7 +411,7 @@ function DonatePage(){
   setStage('review');
   window.scrollTo({top:0,behavior:'smooth'});
  };
- const confirmContribution=async()=>{setDonationSaving(true);setDonationError('');try{const result=await api('/api/submissions/demo-payment',{method:'POST',body:JSON.stringify({need_id:selectedNeedId,amount:contribution})});setReference(result.reference);setStage('success');window.scrollTo({top:0,behavior:'smooth'});}catch(error){setDonationError(error.message);}finally{setDonationSaving(false);}};
+ const confirmContribution=async()=>{setDonationSaving(true);setDonationError('');try{const result=await api('/api/submissions/demo-payment',{method:'POST',body:JSON.stringify({need_id:selectedNeedId,amount:contribution})});setReference(result.reference);setLiveNeeds(current=>current.map(item=>String(item.id)===String(selectedNeedId)?{...item,raised:result.raised,raised_amount_inr:result.raised_amount_inr}:item));setStage('success');window.scrollTo({top:0,behavior:'smooth'});}catch(error){setDonationError(error.message);}finally{setDonationSaving(false);}};
  const resetDonation=()=>{
   setAmount('500');
   setCustomAmount('');
@@ -426,16 +437,16 @@ function DonatePage(){
       <CheckCircle2 size={48}/>
       <span className="eyebrow">DEMO PAYMENT SUCCESSFUL</span>
       <h2>Thank you for<br/><em>showing up.</em></h2>
-      <p>Your <strong>demo payment was recorded successfully</strong>. No real money was collected or transferred to an NGO.</p>
+      <p>Your payment has been recorded successfully. Thank you for supporting {selectedNeed?.title}.</p>
       <div className="report-reference"><span>DEMO REFERENCE</span><strong>{reference}</strong></div>
-      <p className="form-disclaimer">This is a simulated payment for demonstration only. It is not a real financial transaction and no funds have been transferred.</p>
+      
       <button className="button button-dark" type="button" onClick={resetDonation}>Make another contribution <ArrowUpRight size={16}/></button>
      </div>:stage==='review'?<div className="donation-review">
       <div className="form-heading"><span className="eyebrow">03 / REVIEW CONTRIBUTION</span><span className="required-note">Demo checkout</span></div>
       <h2>A little help,<br/><em>with purpose.</em></h2>
       <div className="review-group"><span>YOU’RE SUPPORTING</span><strong>{selectedNeed?.title}</strong><p>{selectedNeed?.ngo} · {selectedNeed?.location}</p></div>
       <div className="review-group donation-review-amount"><span>CONTRIBUTION AMOUNT</span><strong>{formatMoney(contribution)}</strong></div>
-      <p className="form-disclaimer">This is a demonstration only. No payment details are requested and no money will be transferred.</p>
+      
       <div className="review-actions">
        <button className="button button-outline" type="button" onClick={()=>setStage('edit')}>Back to edit</button>
        {donationError&&<span className="location-status" role="alert">{donationError}</span>}<button className="button button-dark" type="button" onClick={confirmContribution} disabled={donationSaving}>{donationSaving?'Processing demo payment…':`Pay ${formatMoney(contribution)} (Demo)`} <ArrowUpRight size={16}/></button>
