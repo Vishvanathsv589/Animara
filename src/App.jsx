@@ -157,8 +157,17 @@ function Home() {
 }
 function PageHero({label,title,desc,action,to,photo}){return <section className="page-hero"><div className="page-hero-copy"><span className="eyebrow">{label}</span><h1>{title}</h1><p>{desc}</p>{action&&<Link className="button button-dark" to={to}>{action}<ArrowUpRight size={17}/></Link>}</div>{photo&&<div className="page-hero-photo">{img(photo,'Animal welfare')}</div>}</section>}
 function NeedsPage(){
- const [items,setItems]=useState(needs);
- React.useEffect(()=>{loadPublicData('/api/needs',needs).then(setItems);},[]);
+ const [items,setItems]=useState([]);
+ const [loading,setLoading]=useState(true);
+ const [loadError,setLoadError]=useState('');
+ React.useEffect(()=>{
+  let active=true;
+  api('/api/needs')
+   .then(result=>{if(active)setItems(Array.isArray(result.data)?result.data:[]);})
+   .catch(error=>{if(active)setLoadError(error.message||'Unable to load current needs. Please try again.');})
+   .finally(()=>{if(active)setLoading(false);});
+  return ()=>{active=false;};
+ },[]);
  const [filter,setFilter]=useState('All');
  const [query,setQuery]=useState('');
  const categories=['All','Food','Medicine','Rescue'];
@@ -189,10 +198,15 @@ function NeedsPage(){
       {(filter!=='All'||query)&&<button type="button" className="reset-filters" onClick={resetFilters}>Clear filters <X size={13}/></button>}
      </div>
     </div>
-    <p className="demo-notice"><AlertCircle size={16}/> Only reviewed requests are published. If the backend has no published records yet, this page may show the original preview examples.</p>
-    {filtered.length>0
-      ? <div className="needs-grid">{filtered.map(n=><NeedCard key={n.id} item={n}/>)}</div>
-      : <div className="needs-empty"><span className="empty-icon"><Search size={22}/></span><h3>No matching requests</h3><p>Try a different keyword or browse all categories.</p><button type="button" className="button button-dark" onClick={resetFilters}>Show all requests <ArrowUpRight size={16}/></button></div>
+    {loading
+      ? <div className="needs-empty"><h3>Loading current needs…</h3><p>Fetching published requests from Animara.</p></div>
+      : loadError
+       ? <div className="needs-empty"><h3>Couldn’t load current needs</h3><p>{loadError}</p><button type="button" className="button button-dark" onClick={()=>window.location.reload()}>Try again <ArrowUpRight size={16}/></button></div>
+       : items.length===0
+        ? <div className="needs-empty"><h3>No published needs yet</h3><p>Published requests from verified organisations will appear here.</p></div>
+        : filtered.length>0
+         ? <div className="needs-grid">{filtered.map(n=><NeedCard key={n.id} item={n}/>)}</div>
+         : <div className="needs-empty"><span className="empty-icon"><Search size={22}/></span><h3>No matching requests</h3><p>Try a different keyword or browse all categories.</p><button type="button" className="button button-dark" onClick={resetFilters}>Show all requests <ArrowUpRight size={16}/></button></div>
     }
    </section>
    <section className="inline-cta needs-inline-cta">
@@ -204,19 +218,29 @@ function NeedsPage(){
   </div>
  </Shell>
 }
+
 function NGOsPage(){
- const [organisations,setOrganisations]=useState(ngos);
- React.useEffect(()=>{loadPublicData('/api/ngos',ngos).then(setOrganisations);},[]);
+ const [organisations,setOrganisations]=useState([]);
+ const [loading,setLoading]=useState(true);
+ const [loadError,setLoadError]=useState('');
+ React.useEffect(()=>{
+  let active=true;
+  api('/api/ngos')
+   .then(result=>{if(active)setOrganisations(Array.isArray(result.data)?result.data:[]);})
+   .catch(error=>{if(active)setLoadError(error.message||'Unable to load the NGO directory. Please try again.');})
+   .finally(()=>{if(active)setLoading(false);});
+  return ()=>{active=false;};
+ },[]);
  const [q,setQ]=useState('');
  const [city,setCity]=useState('All locations');
  const [service,setService]=useState('All services');
- const cityOptions=useMemo(()=>[...new Set(organisations.map(n=>n.city))].sort(),[organisations]);
- const serviceOptions=useMemo(()=>[...new Set(organisations.flatMap(n=>n.focus.split('·').map(item=>item.trim())))].sort(),[organisations]);
+ const cityOptions=useMemo(()=>[...new Set(organisations.map(n=>n.city).filter(Boolean))].sort(),[organisations]);
+ const serviceOptions=useMemo(()=>[...new Set(organisations.flatMap(n=>String(n.focus||'').split('·').map(item=>item.trim()).filter(Boolean)))].sort(),[organisations]);
  const filtered=useMemo(()=>organisations.filter(n=>{
   const searchText=[n.name,n.city,n.state,n.focus,n.description].join(' ').toLowerCase();
   const matchesSearch=searchText.includes(q.trim().toLowerCase());
   const matchesCity=city==='All locations'||n.city===city;
-  const matchesService=service==='All services'||n.focus.toLowerCase().includes(service.toLowerCase());
+  const matchesService=service==='All services'||String(n.focus||'').toLowerCase().includes(service.toLowerCase());
   return matchesSearch&&matchesCity&&matchesService;
  }),[organisations,q,city,service]);
  const hasFilters=Boolean(q.trim())||city!=='All locations'||service!=='All services';
@@ -239,31 +263,53 @@ function NGOsPage(){
     <span className="eyebrow">DIRECTORY RESULTS</span>
     {hasFilters&&<button type="button" onClick={clearFilters}>Clear all filters <X size={13}/></button>}
    </div>
-   <p className="demo-notice"><ShieldCheck size={16}/> Only reviewed organisations are published. If the backend has no published records yet, the original preview directory may appear.</p>
-   {filtered.length>0?<div className="ngo-grid ngo-grid-refined">{filtered.map((n,index)=><article className="ngo-card ngo-card-refined" key={n.id}>
-    <div className="ngo-card-image">{img(n.image,n.name)}<span className="ngo-image-index">0{index+1}</span></div>
-    <div className="ngo-card-body">
-     <div className="ngo-card-title"><h3>{n.name}</h3><span className="verified"><ShieldCheck size={14}/> Listed</span></div>
-     <span className="ngo-location"><MapPin size={14}/>{n.city}, {n.state}</span>
-     <p>{n.description}</p>
-     <div className="ngo-service-tags">{n.focus.split('·').map(tag=><span key={tag}>{tag.trim()}</span>)}</div>
-     <div className="ngo-card-foot"><span>Illustrative activity</span><b>{n.cases} active cases*</b></div>
-     <Link to={`/ngos/${n.id}`} className="text-link">View organisation <ArrowUpRight size={15}/></Link>
-    </div>
-   </article>)}</div>:<div className="ngo-empty-state"><span className="ngo-empty-icon"><Search size={22}/></span><h3>No organisations found.</h3><p>Try another name, location or area of work, or clear your filters to see the full sample directory.</p><button className="button button-dark" type="button" onClick={clearFilters}>Clear filters <ArrowUpRight size={15}/></button></div>}
-   <p className="fine-print">*Illustrative case counts. Confirmed live case information will be supplied by participating organisations.</p>
+   {loading
+    ? <div className="ngo-empty-state"><h3>Loading organisations…</h3><p>Fetching published NGO records from Animara.</p></div>
+    : loadError
+     ? <div className="ngo-empty-state"><h3>Couldn’t load the NGO directory</h3><p>{loadError}</p><button className="button button-dark" type="button" onClick={()=>window.location.reload()}>Try again <ArrowUpRight size={15}/></button></div>
+     : organisations.length===0
+      ? <div className="ngo-empty-state"><span className="ngo-empty-icon"><Search size={22}/></span><h3>No published organisations yet.</h3><p>Verified organisations will appear here once their directory listings are published.</p></div>
+      : filtered.length>0
+       ? <div className="ngo-grid ngo-grid-refined">{filtered.map((n,index)=><article className="ngo-card ngo-card-refined" key={n.id}>
+        <div className="ngo-card-image">{img(n.image,n.name)}<span className="ngo-image-index">0{index+1}</span></div>
+        <div className="ngo-card-body">
+         <div className="ngo-card-title"><h3>{n.name}</h3><span className="verified"><ShieldCheck size={14}/> Listed</span></div>
+         <span className="ngo-location"><MapPin size={14}/>{n.city}, {n.state}</span>
+         <p>{n.description}</p>
+         <div className="ngo-service-tags">{String(n.focus||'').split('·').filter(tag=>tag.trim()).map(tag=><span key={tag}>{tag.trim()}</span>)}</div>
+         <div className="ngo-card-foot"><span>Activity</span><b>{n.cases} active cases</b></div>
+         <Link to={`/ngos/${n.id}`} className="text-link">View organisation <ArrowUpRight size={15}/></Link>
+        </div>
+       </article>)}</div>
+       : <div className="ngo-empty-state"><span className="ngo-empty-icon"><Search size={22}/></span><h3>No organisations found.</h3><p>Try another name, location or area of work, or clear your filters.</p><button className="button button-dark" type="button" onClick={clearFilters}>Clear filters <ArrowUpRight size={15}/></button></div>
+   }
   </section>
   <section className="inline-cta ngo-directory-cta"><span className="eyebrow">ARE YOU PART OF AN ANIMAL-WELFARE TEAM?</span><h2>Good work deserves<br/><em>to be found.</em></h2><p>Tell us about your organisation and the work happening in your community.</p><Link to="/contact" className="button button-dark">Connect with Animara <ArrowUpRight size={16}/></Link></section>
  </Shell>
 }
+
 function NGOProfilePage(){
  const {id}=useParams();
- const [organisations,setOrganisations]=useState(ngos); const [liveNeeds,setLiveNeeds]=useState(needs); const [directoryLoaded,setDirectoryLoaded]=useState(false);
- React.useEffect(()=>{Promise.all([loadPublicData('/api/ngos',ngos),loadPublicData('/api/needs',needs)]).then(([orgs,requests])=>{setOrganisations(orgs);setLiveNeeds(requests);setDirectoryLoaded(true);});},[]);
+ const [organisations,setOrganisations]=useState([]);
+ const [liveNeeds,setLiveNeeds]=useState([]);
+ const [directoryLoaded,setDirectoryLoaded]=useState(false);
+ const [directoryError,setDirectoryError]=useState('');
+ React.useEffect(()=>{
+  let active=true;
+  Promise.allSettled([api('/api/ngos'),api('/api/needs')]).then(([orgs,requests])=>{
+   if(!active)return;
+   if(orgs.status==='fulfilled')setOrganisations(Array.isArray(orgs.value.data)?orgs.value.data:[]);
+   else setDirectoryError(orgs.reason?.message||'Unable to load this organisation.');
+   if(requests.status==='fulfilled')setLiveNeeds(Array.isArray(requests.value.data)?requests.value.data:[]);
+   setDirectoryLoaded(true);
+  });
+  return ()=>{active=false;};
+ },[]);
  const organisation=organisations.find(item=>String(item.id)===String(id));
- if(!organisation && !directoryLoaded)return <Shell><div className="not-found">Loading organisation…</div></Shell>;
+ if(!directoryLoaded)return <Shell><div className="not-found">Loading organisation…</div></Shell>;
+ if(directoryError)return <Shell><div className="not-found"><span className="eyebrow">DIRECTORY / UNAVAILABLE</span><h1>Couldn’t load<br/><em>the directory.</em></h1><p>{directoryError}</p><Link className="button button-dark" to="/ngos">Back to directory <ArrowUpRight size={16}/></Link></div></Shell>;
  if(!organisation)return <Shell><div className="not-found"><span className="eyebrow">DIRECTORY / NOT FOUND</span><h1>This organisation<br/><em>isn’t listed.</em></h1><Link className="button button-dark" to="/ngos">Back to directory <ArrowUpRight size={16}/></Link></div></Shell>;
- const relatedNeeds=liveNeeds.filter(item=>item.ngo.toLowerCase().startsWith(organisation.name.toLowerCase()));
+ const relatedNeeds=liveNeeds.filter(item=>String(item.ngo||'').toLowerCase().startsWith(organisation.name.toLowerCase()));
  return <Shell>
   <PageHero label="NGO DIRECTORY / ORGANISATION PROFILE" title={<>{organisation.name}<br/><em>doing the work.</em></>} desc={`${organisation.city}, ${organisation.state} · ${organisation.focus}`} photo={organisation.image}/>
   <section className="ngo-profile-layout section-pad">
@@ -271,20 +317,19 @@ function NGOProfilePage(){
     <span className="eyebrow">ABOUT THE ORGANISATION</span>
     <h2>Care, close<br/><em>to the community.</em></h2>
     <p>{organisation.description}</p>
-    <div className="ngo-profile-facts"><div><span>LOCATION</span><strong>{organisation.city}, {organisation.state}</strong></div><div><span>FOCUS AREAS</span><strong>{organisation.focus}</strong></div><div><span>ILLUSTRATIVE ACTIVITY</span><strong>{organisation.cases} active cases*</strong></div></div>
-    <p className="fine-print">This is a sample organisation profile. Listing and verification details must be confirmed directly before launch.</p>
+    <div className="ngo-profile-facts"><div><span>LOCATION</span><strong>{organisation.city}, {organisation.state}</strong></div><div><span>FOCUS AREAS</span><strong>{organisation.focus}</strong></div><div><span>ACTIVE CASES</span><strong>{organisation.cases} active cases</strong></div></div>
    </div>
    <aside className="ngo-profile-aside">
     <span className="eyebrow">CONNECT WITH THE TEAM</span>
     <h3>Want to help<br/>their work?</h3>
-    <p>Contact Animara to express interest in connecting with this organisation. We’ll need a verified contact process before live introductions can be made.</p>
+    <p>Contact Animara to express interest in connecting with this organisation.</p>
     <Link className="button button-dark button-wide" to={`/contact?ngo=${organisation.id}`}>Enquire about this organisation <ArrowUpRight size={16}/></Link>
     <Link className="text-link" to="/ngos">Back to all organisations <ArrowRight size={15}/></Link>
    </aside>
   </section>
   <section className="ngo-profile-needs section-pad">
    <div className="section-head"><div><span className="eyebrow">CURRENT NEEDS</span><h2>Support connected<br/><em>to real requirements.</em></h2></div><Link className="text-link" to="/needs">Browse all needs <ArrowUpRight size={15}/></Link></div>
-   {relatedNeeds.length?<div className="needs-grid">{relatedNeeds.map(item=><NeedCard key={item.id} item={item}/>)}</div>:<div className="ngo-profile-no-needs"><p>No sample requests are currently associated with this organisation.</p><Link className="text-link" to="/needs">Explore current needs <ArrowUpRight size={15}/></Link></div>}
+   {relatedNeeds.length?<div className="needs-grid">{relatedNeeds.map(item=><NeedCard key={item.id} item={item}/>)}</div>:<div className="ngo-profile-no-needs"><p>No published requests are currently associated with this organisation.</p><Link className="text-link" to="/needs">Explore current needs <ArrowUpRight size={15}/></Link></div>}
   </section>
  </Shell>
 }
