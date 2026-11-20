@@ -65,7 +65,7 @@ Do not manually define the `VERCEL` environment variable. Vercel supplies its de
 
 ### Frontend API URL behavior
 
-In a production Vercel deployment, `src/lib/api.js` uses relative `/api/...` paths so requests are routed to the Express service through the shared Vercel domain. During local Vite development, the default API URL remains `http://localhost:5000`. Set `VITE_API_URL` locally only when you need to override that default.
+In a production Vercel deployment, `src/lib/api.js` uses relative `/api/...` paths so requests are routed to the Express service through the shared Vercel domain. During local Vite development, the default API URL remains `http://localhost:5000`. Set `VITE_API_URL` in a local `.env` file only when you need to override that default. **Do not set `VITE_API_URL` in the Vercel app service environment**; defining it there would bypass the shared Vercel `/api/*` routing and send browser requests to the override host.
 
 ### Keeping Render as a backup
 
