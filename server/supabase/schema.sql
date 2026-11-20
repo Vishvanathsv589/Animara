@@ -28,6 +28,7 @@ create table if not exists public.needs (
   category text not null default 'Rescue',
   amount text not null default '₹0',
   raised integer not null default 0 check (raised between 0 and 100),
+  raised_amount_inr bigint not null default 0,
   urgency text not null default 'In progress',
   location text not null default '',
   image text not null default '',
@@ -72,6 +73,65 @@ create table if not exists public.donation_intents (
   created_at timestamptz not null default now()
 );
 
+-- Atomically records a simulated payment and updates the associated need's progress.
+create or replace function public.record_demo_payment(p_need_id bigint, p_amount_inr integer)
+returns jsonb
+language plpgsql
+set search_path = public, pg_temp
+as $function$
+declare
+  v_need public.needs%rowtype;
+  v_target_amount_inr bigint;
+  v_new_raised_amount_inr bigint;
+  v_new_raised_percent integer;
+  v_donation_id uuid;
+begin
+  if p_need_id is null or p_amount_inr is null or p_amount_inr < 1 or p_amount_inr > 1000000 then
+    raise exception 'Choose a valid need and a whole-number amount.' using errcode = '22023';
+  end if;
+
+  select * into v_need
+  from public.needs
+  where id = p_need_id and status = 'published'
+  for update;
+
+  if not found then
+    raise exception 'This need is no longer available.' using errcode = 'P0002';
+  end if;
+
+  v_target_amount_inr := nullif(regexp_replace(coalesce(v_need.amount, ''), '[^0-9]', '', 'g'), '')::bigint;
+  if v_target_amount_inr is null or v_target_amount_inr < 1 then
+    raise exception 'This need does not have a valid target amount.' using errcode = '22023';
+  end if;
+
+  v_new_raised_amount_inr := coalesce(v_need.raised_amount_inr, 0) + p_amount_inr;
+  v_new_raised_percent := least(
+    100,
+    greatest(0, round(v_new_raised_amount_inr::numeric * 100 / v_target_amount_inr)::integer)
+  );
+
+  insert into public.donation_intents (need_id, amount_inr, payment_status)
+  values (p_need_id, p_amount_inr, 'demo_paid')
+  returning id into v_donation_id;
+
+  update public.needs
+  set raised_amount_inr = v_new_raised_amount_inr,
+      raised = v_new_raised_percent,
+      updated_at = now()
+  where id = p_need_id;
+
+  return jsonb_build_object(
+    'reference', v_donation_id,
+    'payment_status', 'demo_paid',
+    'raised_amount_inr', v_new_raised_amount_inr,
+    'raised', v_new_raised_percent
+  );
+end;
+$function$;
+
+revoke all on function public.record_demo_payment(bigint, integer) from public, anon, authenticated;
+grant execute on function public.record_demo_payment(bigint, integer) to service_role;
+
 -- The Express API uses the service-role key. No public client may read/write these tables directly.
 alter table public.admin_users enable row level security;
 alter table public.ngos enable row level security;
@@ -97,5 +157,12 @@ insert into public.needs (id,ngo,title,category,amount,raised,urgency,location,i
 (2,'The Voice of Stray Dogs · Chennai','Wound-care kits for street rescues','Medicine','₹7,200',35,'High priority','Adyar, Chennai','https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&w=1000&q=85','Antiseptic, gauze, bandages and basic wound-care supplies for ongoing cases.','draft'),
 (3,'Animal Aid Collective · Mysuru','Transport support for emergency rescues','Rescue','₹3,500',78,'In progress','Mysuru, Karnataka','https://images.unsplash.com/photo-1551717743-49959800b1f6?auto=format&fit=crop&w=1000&q=85','Fuel and transport support to move injured animals to partner veterinary clinics.','draft')
 on conflict (id) do nothing;
+-- Initialize the rupee totals from the seeded progress percentages.
+update public.needs n
+set raised_amount_inr = round(
+  coalesce(nullif(regexp_replace(coalesce(n.amount, ''), '[^0-9]', '', 'g'), ''), '0')::numeric
+  * n.raised::numeric / 100
+)::bigint
+where n.raised_amount_inr = 0;
 select setval(pg_get_serial_sequence('public.ngos','id'), greatest((select coalesce(max(id),1) from public.ngos),1));
 select setval(pg_get_serial_sequence('public.needs','id'), greatest((select coalesce(max(id),1) from public.needs),1));

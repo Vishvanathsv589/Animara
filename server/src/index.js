@@ -21,6 +21,10 @@ app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, stan
 app.use('/api/submissions', rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false }));
 
 const clean = (value, max = 2000) => String(value ?? '').trim().slice(0, max);
+const parseRupees = value => {
+  const digits = String(value ?? '').replace(/[^0-9]/g, '');
+  return digits ? Number(digits) : 0;
+};
 const fail = (res, error, status = 400) => res.status(status).json({ error: error?.message || 'Request could not be completed.' });
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'animara-api', databaseConfigured: Boolean(supabaseAdmin) }));
 
@@ -70,19 +74,22 @@ app.post('/api/submissions/donation-intent', requireSupabase, async (req, res) =
   res.status(201).json({ reference: data.id, payment_status: 'not_started', message: 'Donation intent saved. No payment has been collected.' });
 });
 
-// Demo-only payment: records a simulated success without contacting any payment provider.
+// Demo-only payment: record the simulated payment and update the need total atomically.
 app.post('/api/submissions/demo-payment', requireSupabase, async (req, res) => {
   const needId = Number(req.body.need_id), amount = Number(req.body.amount);
   if (!Number.isInteger(needId) || !Number.isInteger(amount) || amount < 1 || amount > 1000000) return res.status(422).json({ error: 'Choose a valid need and a whole-number amount.' });
-  const { data: need, error: needError } = await supabaseAdmin.from('needs').select('id').eq('id', needId).eq('status', 'published').maybeSingle();
-  if (needError || !need) return res.status(404).json({ error: 'This need is no longer available.' });
-  const { data, error } = await supabaseAdmin.from('donation_intents').insert({ need_id: needId, amount_inr: amount, payment_status: 'demo_paid' }).select('id, created_at').single();
-  if (error) return fail(res, error, 500);
+  const { data, error } = await supabaseAdmin.rpc('record_demo_payment', {
+    p_need_id: needId,
+    p_amount_inr: amount
+  });
+  if (error) return fail(res, error, error.code === 'P0002' ? 404 : 400);
   res.status(201).json({
-    reference: data.id,
-    payment_status: 'demo_paid',
+    reference: data.reference,
+    payment_status: data.payment_status,
+    raised_amount_inr: data.raised_amount_inr,
+    raised: data.raised,
     demo: true,
-    message: 'Demo payment completed successfully. No real payment was collected or transferred.'
+    message: 'Demo payment completed successfully.'
   });
 });
 
@@ -133,18 +140,28 @@ app.post('/api/admin/needs', async (req, res) => {
   const payload = pick(req.body, ['ngo','title','category','amount','raised','urgency','location','image','description','status']);
   if (!payload.title || !payload.ngo || !payload.description) return res.status(422).json({ error: 'Title, NGO and description are required.' });
   if (payload.status === 'published' && !(await isApprovedNgo(payload.ngo))) return res.status(422).json({ error: 'Publish this need only after its matching NGO has been verified and published.' });
+  const targetAmount = parseRupees(payload.amount);
+  const raisedPercent = Math.min(100, Math.max(0, Number(payload.raised) || 0));
+  payload.raised_amount_inr = Math.round(targetAmount * raisedPercent / 100);
   const { data, error } = await supabaseAdmin.from('needs').insert(payload).select('*').single();
   if (error) return fail(res, error, 400);
   res.status(201).json({ data });
 });
 app.patch('/api/admin/needs/:id', async (req, res) => {
-  if (req.body.status === 'published' || req.body.ngo) {
-    const { data: current, error } = await supabaseAdmin.from('needs').select('ngo').eq('id', req.params.id).maybeSingle();
-    if (error) return fail(res, error, 500);
-    const targetNgo = req.body.ngo || current?.ngo;
-    if (req.body.status === 'published' && !(await isApprovedNgo(targetNgo))) return res.status(422).json({ error: 'Publish this need only after its matching NGO has been verified and published.' });
+  const { data: current, error } = await supabaseAdmin.from('needs').select('ngo,amount,raised').eq('id', req.params.id).maybeSingle();
+  if (error) return fail(res, error, 500);
+  if (!current) return res.status(404).json({ error: 'Need not found.' });
+  const targetNgo = req.body.ngo || current.ngo;
+  if (req.body.status === 'published' && !(await isApprovedNgo(targetNgo))) return res.status(422).json({ error: 'Publish this need only after its matching NGO has been verified and published.' });
+
+  const amountChanged = req.body.amount !== undefined && String(req.body.amount) !== String(current.amount);
+  const raisedChanged = req.body.raised !== undefined && Number(req.body.raised) !== Number(current.raised);
+  if (amountChanged || raisedChanged) {
+    const targetAmount = parseRupees(req.body.amount ?? current.amount);
+    const raisedPercent = Math.min(100, Math.max(0, Number(req.body.raised ?? current.raised) || 0));
+    req.body.raised_amount_inr = Math.round(targetAmount * raisedPercent / 100);
   }
-  return updateRow('needs', req, res, ['ngo','title','category','amount','raised','urgency','location','image','description','status']);
+  return updateRow('needs', req, res, ['ngo','title','category','amount','raised','raised_amount_inr','urgency','location','image','description','status']);
 });
 app.delete('/api/admin/needs/:id', async (req, res) => deleteRow('needs', req, res));
 app.post('/api/admin/ngos', async (req, res) => {

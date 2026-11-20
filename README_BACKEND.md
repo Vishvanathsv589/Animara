@@ -8,7 +8,7 @@ This backend is added to the existing V1-based V4 React + Vite project. The publ
 - API: Node.js + Express (`server/`)
 - Database and authentication: Supabase PostgreSQL + Supabase Auth
 - Private report photo storage: Supabase Storage bucket `rescue-photos`
-- Payments: no payment gateway is connected. The public Pay button completes a simulated demo checkout, records `payment_status = 'demo_paid'`, and shows **Demo payment successful** in Admin. No money is collected or transferred.
+- Payments: no payment gateway is connected. The public Pay button completes a simulated demo checkout, records `payment_status = 'demo_paid'`, shows **Demo payment successful** in Admin, and increases the associated need's raised rupee total and progress percentage.
 
 ## 1. Create Supabase project
 
@@ -76,7 +76,7 @@ Public:
 - `POST /api/submissions/contact`
 - `POST /api/submissions/rescue-report` (multipart form; up to 3 JPG/PNG/WEBP files, 5 MB each)
 - `POST /api/submissions/donation-intent` (records an intent only; no payment)
-- `POST /api/submissions/demo-payment` (records a simulated successful checkout with `demo_paid`; no payment provider or real funds)
+- `POST /api/submissions/demo-payment` (atomically records a simulated successful checkout with `demo_paid` and updates the need's raised amount and percentage)
 
 Admin (requires an access token for a user in `admin_users`):
 - `POST /api/auth/login`

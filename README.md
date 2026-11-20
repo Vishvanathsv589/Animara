@@ -30,7 +30,7 @@ npm run preview
 
 ## Important implementation notes
 
-- The V5 frontend is integrated with an Express/Supabase backend. Contact, rescue-report and donation-intent submissions are sent to the API when the backend is configured; verify production environment variables and test submissions before launch.
+- The V5 frontend is integrated with an Express/Supabase backend. Contact and rescue-report submissions are sent to the API; the Pay button records a successful demo payment and updates the matching need's raised amount and progress percentage in Supabase.
 - Needs and NGO entries in `src/data.js` are sample content for layout demonstration, not verified live records.
 - No payment gateway or real money movement is integrated. The Pay button runs a clearly labelled demo checkout and records `demo_paid`; the Admin dashboard displays **Demo payment successful**. NGO listings require admin verification and publication before appearing as live public records. Other optional geolocation, notification, and rescue-routing integrations are not part of the current API.
 - Before launch, verify and replace sample records and placeholder contact details, review Supabase production configuration, and decide whether to add a payment provider and any optional location or notification integrations.
