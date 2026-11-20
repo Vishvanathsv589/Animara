@@ -32,7 +32,7 @@ npm run preview
 
 - The V5 frontend is integrated with an Express/Supabase backend. Contact, rescue-report and donation-intent submissions are sent to the API when the backend is configured; verify production environment variables and test submissions before launch.
 - Needs and NGO entries in `src/data.js` are sample content for layout demonstration, not verified live records.
-- Payment collection is not integrated; contribution submissions currently create donation-intent records only. NGO listings require admin verification and publication before appearing as live public records. Other optional geolocation, notification, and rescue-routing integrations are not part of the current API.
+- No payment gateway or real money movement is integrated. The Pay button runs a clearly labelled demo checkout and records `demo_paid`; the Admin dashboard displays **Demo payment successful**. NGO listings require admin verification and publication before appearing as live public records. Other optional geolocation, notification, and rescue-routing integrations are not part of the current API.
 - Before launch, verify and replace sample records and placeholder contact details, review Supabase production configuration, and decide whether to add a payment provider and any optional location or notification integrations.
 - Photography is loaded from Unsplash URLs and requires an internet connection.
 - Design direction is an original Animara interpretation of Atomicdust's editorial approach: oversized typography, strong visual blocks, asymmetric image-led sections, graphic accents, clear conversion paths and restrained motion. It does not copy Atomicdust's source code or proprietary assets.
