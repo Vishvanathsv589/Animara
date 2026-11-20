@@ -14,12 +14,7 @@ const app = express();
 const port = Number(process.env.PORT || 5000);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 3 }, fileFilter: (_req, file, cb) => ['image/jpeg','image/png','image/webp'].includes(file.mimetype) ? cb(null, true) : cb(new Error('Only JPG, PNG and WEBP images are allowed.')) });
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-// Same-origin browser traffic is used by the Vercel Services deployment.
-const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',').map(x => x.trim());
-app.use(cors({ origin: (origin, callback) => {
-  if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return callback(null, true);
-  return callback(null, false);
-}, credentials: false }));
+app.use(cors({ origin: (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',').map(x => x.trim()), credentials: false }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false }));
@@ -103,21 +98,43 @@ app.get('/api/admin/:resource', async (req, res) => {
   const map = { needs: 'needs', ngos: 'ngos', reports: 'rescue_reports', enquiries: 'contact_enquiries', donations: 'donation_intents' };
   const table = map[req.params.resource];
   if (!table) return res.status(404).json({ error: 'Unknown admin resource.' });
-  const { data, error } = await supabaseAdmin.from(table).select('*').order('created_at', { ascending: false });
+  const { data, error } = await supabaseAdmin.from(table).select('*').order('created_at', { ascending: false }).limit(250);
   if (error) return fail(res, error, 500);
-  res.json({ data: data || [] });
+  let records = data || [];
+  if (table === 'rescue_reports') {
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'rescue-photos';
+    records = await Promise.all(records.map(async (record) => {
+      const photo_urls = await Promise.all((record.photo_paths || []).map(async (path) => {
+        const { data: signed } = await supabaseAdmin.storage.from(bucket).createSignedUrl(path, 60 * 10);
+        return signed?.signedUrl || null;
+      }));
+      return { ...record, photo_urls: photo_urls.filter(Boolean) };
+    }));
+  }
+  res.json({ data: records });
 });
 app.post('/api/admin/needs', async (req, res) => {
-  const allowed = ['title','category','city','state','description','target_amount','raised_amount','ngo_name','image','status'];
-  const payload = Object.fromEntries(allowed.filter(k => req.body[k] !== undefined).map(k => [k, req.body[k]]));
+  const payload = pick(req.body, ['ngo','title','category','amount','raised','urgency','location','image','description','status']);
+  if (!payload.title || !payload.ngo || !payload.description) return res.status(422).json({ error: 'Title, NGO and description are required.' });
+  if (payload.status === 'published' && !(await isApprovedNgo(payload.ngo))) return res.status(422).json({ error: 'Publish this need only after its matching NGO has been verified and published.' });
   const { data, error } = await supabaseAdmin.from('needs').insert(payload).select('*').single();
   if (error) return fail(res, error, 400);
   res.status(201).json({ data });
 });
-app.patch('/api/admin/needs/:id', async (req, res) => updateRow('needs', req, res, ['title','category','city','state','description','target_amount','raised_amount','ngo_name','image','status']));
+app.patch('/api/admin/needs/:id', async (req, res) => {
+  if (req.body.status === 'published' || req.body.ngo) {
+    const { data: current, error } = await supabaseAdmin.from('needs').select('ngo').eq('id', req.params.id).maybeSingle();
+    if (error) return fail(res, error, 500);
+    const targetNgo = req.body.ngo || current?.ngo;
+    if (req.body.status === 'published' && !(await isApprovedNgo(targetNgo))) return res.status(422).json({ error: 'Publish this need only after its matching NGO has been verified and published.' });
+  }
+  return updateRow('needs', req, res, ['ngo','title','category','amount','raised','urgency','location','image','description','status']);
+});
 app.delete('/api/admin/needs/:id', async (req, res) => deleteRow('needs', req, res));
 app.post('/api/admin/ngos', async (req, res) => {
   const payload = pick(req.body, ['name','city','state','focus','cases','verified','description','image','status']);
+  if (!payload.name || !payload.city || !payload.state) return res.status(422).json({ error: 'Name, city and state are required.' });
+  if (payload.status === 'published' && payload.verified !== true) return res.status(422).json({ error: 'Verify this organisation before publishing its public listing.' });
   const { data, error } = await supabaseAdmin.from('ngos').insert(payload).select('*').single();
   if (error) return fail(res, error, 400);
   res.status(201).json({ data });
@@ -164,7 +181,6 @@ app.use((err, _req, res, _next) => {
   if (err instanceof multer.MulterError) return res.status(400).json({ error: err.message });
   res.status(500).json({ error: 'Unexpected server error.' });
 });
-
 export default app;
 // Keep the standalone listener for the existing Render backup deployment.
 if (!process.env.VERCEL) {
