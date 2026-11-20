@@ -390,17 +390,33 @@ function ContactPage(){
 
 function DonatePage(){
  const [liveNeeds,setLiveNeeds]=useState(needs);
- React.useEffect(()=>{loadPublicData('/api/needs',needs).then(setLiveNeeds);},[]);
+ const [needsLoading,setNeedsLoading]=useState(true);
  const [donationError,setDonationError]=useState(''); const [donationSaving,setDonationSaving]=useState(false);
  const [searchParams]=useSearchParams();
  const requestedNeedId=searchParams.get('need');
- const validRequestedNeed=liveNeeds.some(item=>String(item.id)===String(requestedNeedId));
- const [selectedNeedId,setSelectedNeedId]=useState(validRequestedNeed?String(requestedNeedId):String(liveNeeds[0]?.id??''));
+ const [selectedNeedId,setSelectedNeedId]=useState(()=>requestedNeedId?String(requestedNeedId):String(needs[0]?.id??''));
+ React.useEffect(()=>{
+  let cancelled=false;
+  const applyNeeds=records=>{
+   const available=Array.isArray(records)&&records.length?records:needs;
+   if(cancelled)return;
+   setLiveNeeds(available);
+   setSelectedNeedId(current=>{
+    const requested=requestedNeedId?String(requestedNeedId):'';
+    if(requested&&available.some(item=>String(item.id)===requested))return requested;
+    if(current&&available.some(item=>String(item.id)===String(current)))return String(current);
+    return String(available[0]?.id??'');
+   });
+   setNeedsLoading(false);
+  };
+  api('/api/needs').then(result=>applyNeeds(result.data)).catch(()=>applyNeeds(needs));
+  return ()=>{cancelled=true;};
+ },[requestedNeedId]);
  const [amount,setAmount]=useState('500');
  const [customAmount,setCustomAmount]=useState('');
  const [stage,setStage]=useState('edit');
  const [reference,setReference]=useState('');
- const selectedNeed=liveNeeds.find(item=>String(item.id)===String(selectedNeedId))||liveNeeds[0];
+ const selectedNeed=liveNeeds.find(item=>String(item.id)===String(selectedNeedId));
  const presets=[250,500,1000,2000];
  const contribution=customAmount.trim()===''?Number(amount):Number(customAmount);
  const validContribution=Number.isFinite(contribution)&&contribution>=1&&Number.isInteger(contribution);
@@ -452,8 +468,8 @@ function DonatePage(){
        {donationError&&<span className="location-status" role="alert">{donationError}</span>}<button className="button button-dark" type="button" onClick={confirmContribution} disabled={donationSaving}>{donationSaving?'Processing demo payment…':`Pay ${formatMoney(contribution)} (Demo)`} <ArrowUpRight size={16}/></button>
       </div>
      </div>:<form onSubmit={continueToReview}>
-      <div className="form-heading"><span className="eyebrow">01 / PICK A NEED</span></div>
-      {liveNeeds.length>0?<>
+      {needsLoading?<div className="needs-empty"><h3>Loading current needs…</h3><p>Please wait while we load the selected request.</p></div>:liveNeeds.length>0?<>
+       <div className="form-heading"><span className="eyebrow">01 / PICK A NEED</span></div>
        <label>I’d like to support
         <select value={selectedNeedId} onChange={e=>setSelectedNeedId(e.target.value)}>
          {liveNeeds.map(item=><option key={item.id} value={String(item.id)}>{item.title}</option>)}
@@ -465,18 +481,18 @@ function DonatePage(){
         <span>{selectedNeed.location}</span>
         <small>{selectedNeed.amount} target</small>
        </div>}
-      </>:<div className="needs-empty"><h3>No sample needs are available.</h3><p>Please check the Current Needs page again later.</p></div>}
-      <div className="form-heading form-heading-spaced"><span className="eyebrow">02 / CHOOSE AN AMOUNT</span></div>
-      <div className="donation-presets" role="group" aria-label="Choose a contribution amount">
-       {presets.map(value=><button key={value} type="button" className={!customAmount&&Number(amount)===value?'active':''} aria-pressed={!customAmount&&Number(amount)===value} onClick={()=>{setAmount(String(value));setCustomAmount('');}}>{formatMoney(value)}</button>)}
-      </div>
-      <label>Or enter an amount (₹)
-       <input type="number" min="1" step="1" inputMode="numeric" value={customAmount} onChange={e=>setCustomAmount(e.target.value)} placeholder="Enter an amount"/>
-      </label>
-      {customAmount!==''&&(!validContribution)&&<span className="location-status" role="alert">Enter a whole amount of at least ₹1.</span>}
-      <button className="button button-dark button-wide" type="submit" disabled={!selectedNeed||!validContribution}>Continue with contribution <ArrowUpRight size={16}/></button>
-      {donationError&&<span className="location-status" role="alert">{donationError}</span>}<p className="form-disclaimer">Demo mode: the next step records a successful simulated payment in Animara. No payment gateway or real money is involved.</p>
-     </form>}
+       <div className="form-heading form-heading-spaced"><span className="eyebrow">02 / CHOOSE AN AMOUNT</span></div>
+       <div className="donation-presets" role="group" aria-label="Choose a contribution amount">
+        {presets.map(value=><button key={value} type="button" className={!customAmount&&Number(amount)===value?'active':''} aria-pressed={!customAmount&&Number(amount)===value} onClick={()=>{setAmount(String(value));setCustomAmount('');}}>{formatMoney(value)}</button>)}
+       </div>
+       <label>Or enter an amount (₹)
+        <input type="number" min="1" step="1" inputMode="numeric" value={customAmount} onChange={e=>setCustomAmount(e.target.value)} placeholder="Enter an amount"/>
+       </label>
+       {customAmount!==''&&(!validContribution)&&<span className="location-status" role="alert">Enter a whole amount of at least ₹1.</span>}
+       <button className="button button-dark button-wide" type="submit" disabled={!selectedNeed||!validContribution}>Continue with contribution <ArrowUpRight size={16}/></button>
+       {donationError&&<span className="location-status" role="alert">{donationError}</span>}<p className="form-disclaimer">Demo mode: the next step records a successful simulated payment in Animara. No payment gateway or real money is involved.</p>
+      </>:<div className="needs-empty"><h3>No published needs are available.</h3><p>Please check the Current Needs page again later.</p></div>}
+     </form>
    </div>
   </section>
   <section className="donation-trust-band">
