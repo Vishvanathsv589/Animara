@@ -537,7 +537,7 @@ function DonatePage(){
        <button className="button button-dark button-wide" type="submit" disabled={!selectedNeed||!validContribution}>Continue with contribution <ArrowUpRight size={16}/></button>
        {donationError&&<span className="location-status" role="alert">{donationError}</span>}<p className="form-disclaimer">Demo mode: the next step records a successful simulated payment in Animara. No payment gateway or real money is involved.</p>
       </>:<div className="needs-empty"><h3>No published needs are available.</h3><p>Please check the Current Needs page again later.</p></div>}
-     </form>
+     </form>}
    </div>
   </section>
   <section className="donation-trust-band">
